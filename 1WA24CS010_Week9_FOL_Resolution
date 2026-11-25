@@ -1,0 +1,154 @@
+
+
+import re
+
+# Knowledge Base in CNF
+KB = {
+    "C1": ["~Food(x)", "Likes(John,x)"],
+    "C2": ["Food(Apple)"],
+    "C3": ["Food(Vegetables)"],
+    "C4": ["~Eats(x,y)", "Killed(x)", "Food(y)"],
+    "C5": ["Eats(Anil,Peanuts)"],
+    "C6": ["Alive(Anil)"],
+    "C7": ["~Eats(Anil,x)", "Eats(Harry,x)"],
+    "C8": ["~Alive(x)", "~Killed(x)"],
+    "C9": ["Killed(x)", "Alive(x)"]
+}
+
+# Negated Query
+KB["C10"] = ["~Likes(John,Peanuts)"]
+
+
+# Check whether a term is a variable
+def is_variable(term):
+    return bool(re.fullmatch(r"[a-z]", term))
+
+
+# Apply substitution
+def apply_substitution(term, substitution):
+    while term in substitution:
+        term = substitution[term]
+    return term
+
+
+# Unification
+def unify(a, b, substitution):
+    a = apply_substitution(a, substitution)
+    b = apply_substitution(b, substitution)
+
+    if a == b:
+        return True
+
+    if is_variable(a):
+        substitution[a] = b
+        return True
+
+    if is_variable(b):
+        substitution[b] = a
+        return True
+
+    return False
+
+
+# Parse predicate
+def parse_literal(literal):
+    negative = literal.startswith("~")
+
+    if negative:
+        literal = literal[1:]
+
+    name, args = literal[:-1].split("(")
+
+    return negative, name, args.split(",") if args else []
+
+
+# Apply substitution to a literal
+def substitute_literal(literal, substitution):
+    neg, name, args = parse_literal(literal)
+
+    args = [apply_substitution(a, substitution) for a in args]
+
+    prefix = "~" if neg else ""
+
+    return prefix + name + "(" + ",".join(args) + ")"
+
+
+# Resolution
+def resolve(c1, i, c2, j):
+    neg1, pred1, args1 = parse_literal(c1[i])
+    neg2, pred2, args2 = parse_literal(c2[j])
+
+    if neg1 == neg2 or pred1 != pred2:
+        return None, None
+
+    if len(args1) != len(args2):
+        return None, None
+
+    substitution = {}
+
+    for a, b in zip(args1, args2):
+        if not unify(a, b, substitution):
+            return None, None
+
+    result = []
+
+    for k, literal in enumerate(c1):
+        if k != i:
+            result.append(substitute_literal(literal, substitution))
+
+    for k, literal in enumerate(c2):
+        if k != j:
+            result.append(substitute_literal(literal, substitution))
+
+    return result, substitution
+
+
+# Display Knowledge Base
+print("INITIAL KNOWLEDGE BASE")
+
+for name, clause in KB.items():
+    print(name + ":", " OR ".join(clause))
+
+
+# Guided Resolution Proof
+print("\nRESOLUTION STEPS")
+
+# Step 1: Resolve C8 and C6
+R1, theta1 = resolve(KB["C8"], 0, KB["C6"], 0)
+
+print("\nStep 1: C8 + C6")
+print("Substitution:", theta1)
+print("R1:", " OR ".join(R1))
+
+# Step 2: Resolve C4 and C5
+R2, theta2 = resolve(KB["C4"], 0, KB["C5"], 0)
+
+print("\nStep 2: C4 + C5")
+print("Substitution:", theta2)
+print("R2:", " OR ".join(R2))
+
+# Step 3: Resolve R2 and R1
+R3, theta3 = resolve(R2, 0, R1, 0)
+
+print("\nStep 3: R2 + R1")
+print("Substitution:", theta3)
+print("R3:", " OR ".join(R3))
+
+# Step 4: Resolve C1 and R3
+R4, theta4 = resolve(KB["C1"], 0, R3, 0)
+
+print("\nStep 4: C1 + R3")
+print("Substitution:", theta4)
+print("R4:", " OR ".join(R4))
+
+# Step 5: Resolve R4 and C10
+R5, theta5 = resolve(R4, 0, KB["C10"], 0)
+
+print("\nStep 5: R4 + C10")
+
+if R5 == []:
+    print("R5: Empty Clause (□)")
+    print("\nRESULT: QUERY PROVED!")
+    print("John likes peanuts.")
+else:
+    print("Resolution failed.")
